@@ -1,0 +1,26 @@
+{
+  "canisters": {
+    "landx_backend": {
+      "main": "src/landx_backend/main.mo",
+      "type": "motoko"
+    },
+    "landx_frontend": {
+      "dependencies": [
+        "landx_backend"
+      ],
+      "source": [
+        "src/landx_frontend/dist"
+      ],
+      "type": "assets",
+      "workspace": "landx_frontend"
+    }
+  },
+  "defaults": {
+    "build": {
+      "args": "",
+      "packtool": ""
+    }
+  },
+  "output_env_file": ".env",
+  "version": 1
+}
