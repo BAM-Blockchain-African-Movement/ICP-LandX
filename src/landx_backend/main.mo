@@ -9,6 +9,7 @@ import List "mo:base/List";
 import Iter "mo:base/Iter";
 import Error "mo:base/Error";
 import Result "mo:base/Result";
+import Hash "mo:base/Hash";
 
 actor TitreFoncier {
     type UserRole = {
@@ -16,6 +17,8 @@ actor TitreFoncier {
         #Proprietaire;
         #AgentImmobilier;
         #Public;
+        #Notaire;
+        #Geometre;
     };
 
     type User = {
@@ -36,6 +39,13 @@ actor TitreFoncier {
         dateUpload : Time.Time;
     };
 
+    type VerificationProof = {
+        verifierId: Principal;
+        timestamp: Time.Time;
+        proofType: Text;
+        proofHash: Text;
+    };
+
     type Titre = {
         id : Nat;
         proprietaire : Principal;
@@ -45,6 +55,9 @@ actor TitreFoncier {
         coordonnees : Coordonnees;
         documents : [Document];
         statut : Text;
+        verifications : [VerificationProof];
+        gpsCoordinates : [Float];
+        contestationPeriodEnd : Time.Time;
     };
 
     type Transaction = {
@@ -65,16 +78,19 @@ actor TitreFoncier {
         statut : Text;
     };
 
+    func natHash(n : Nat) : Hash.Hash {
+        Text.hash(Nat.toText(n))
+    };
+
     private stable var nextId : Nat = 0;
     private stable var nextDocId : Nat = 0;
     private stable var nextTransactionId : Nat = 0;
     private stable var nextLitigeId : Nat = 0;
-    private var titres = HashMap.HashMap<Nat, Titre>(0, Nat.equal, Nat.hash);
+    private var titres = HashMap.HashMap<Nat, Titre>(0, Nat.equal, natHash);
     private var users = HashMap.HashMap<Principal, User>(0, Principal.equal, Principal.hash);
-    private var transactions = HashMap.HashMap<Nat, Transaction>(0, Nat.equal, Nat.hash);
-    private var litiges = HashMap.HashMap<Nat, Litige>(0, Nat.equal, Nat.hash);
+    private var transactions = HashMap.HashMap<Nat, Transaction>(0, Nat.equal, natHash);
+    private var litiges = HashMap.HashMap<Nat, Litige>(0, Nat.equal, natHash);
 
-    // Fonction pour créer un utilisateur
     public shared(msg) func creerUtilisateur(nom : Text, role : UserRole) : async Bool {
         let user : User = {
             id = msg.caller;
@@ -85,8 +101,7 @@ actor TitreFoncier {
         true
     };
 
-    // Fonction pour créer un titre foncier (accessible aux fonctionnaires)
-    public shared(msg) func creerTitre(localisation : Text, superficie : Nat, lat : Float, long : Float) : async Result<Nat, Text> {
+    public shared(msg) func creerTitre(localisation : Text, superficie : Nat, lat : Float, long : Float, gpsCoords : [Float]) : async Result.Result<Nat, Text> {
         switch (users.get(msg.caller)) {
             case (?user) {
                 switch (user.role) {
@@ -102,7 +117,10 @@ actor TitreFoncier {
                             dateCreation = Time.now();
                             coordonnees = { latitude = lat; longitude = long };
                             documents = [];
-                            statut = "Actif";
+                            statut = "En attente de vérification";
+                            verifications = [];
+                            gpsCoordinates = gpsCoords;
+                            contestationPeriodEnd = Time.now() + 30 * 24 * 60 * 60 * 1000000000;
                         };
 
                         titres.put(id, nouveauTitre);
@@ -115,15 +133,83 @@ actor TitreFoncier {
         }
     };
 
-    // Fonction pour transférer un titre (accessible aux propriétaires et agents immobiliers)
-    public shared(msg) func transfererTitre(id : Nat, nouveauProprietaire : Principal) : async Result<Bool, Text> {
+    public shared(msg) func verifierTitre(titreId : Nat, proofType : Text, proofHash : Text) : async Result.Result<Bool, Text> {
+        switch (users.get(msg.caller)) {
+            case (?user) {
+                switch (user.role) {
+                    case (#Notaire or #Geometre or #Fonctionnaire) {
+                        switch (titres.get(titreId)) {
+                            case (?titre) {
+                                let nouvelleVerification : VerificationProof = {
+                                    verifierId = msg.caller;
+                                    timestamp = Time.now();
+                                    proofType = proofType;
+                                    proofHash = proofHash;
+                                };
+                                let nouvellesVerifications = Array.append(titre.verifications, [nouvelleVerification]);
+                                let titreModifie = {
+                                    id = titre.id;
+                                    proprietaire = titre.proprietaire;
+                                    localisation = titre.localisation;
+                                    superficie = titre.superficie;
+                                    dateCreation = titre.dateCreation;
+                                    coordonnees = titre.coordonnees;
+                                    documents = titre.documents;
+                                    statut = if (nouvellesVerifications.size() >= 3) "Vérifié" else titre.statut;
+                                    verifications = nouvellesVerifications;
+                                    gpsCoordinates = titre.gpsCoordinates;
+                                    contestationPeriodEnd = titre.contestationPeriodEnd;
+                                };
+                                titres.put(titreId, titreModifie);
+                                #ok(true)
+                            };
+                            case (null) #err("Titre non trouvé.")
+                        }
+                    };
+                    case (_) #err("Accès non autorisé. Seuls les notaires, géomètres et fonctionnaires peuvent vérifier les titres.")
+                };
+            };
+            case (null) #err("Utilisateur non trouvé.")
+        }
+    };
+
+    public shared(msg) func contesterTitre(titreId : Nat, raison : Text) : async Result.Result<Bool, Text> {
+        switch (users.get(msg.caller)) {
+            case (?user) {
+                switch (titres.get(titreId)) {
+                    case (?titre) {
+                        if (Time.now() <= titre.contestationPeriodEnd) {
+                            let id = nextLitigeId;
+                            nextLitigeId += 1;
+                            let nouveauLitige : Litige = {
+                                id = id;
+                                titreId = titreId;
+                                demandeur = msg.caller;
+                                description = raison;
+                                dateCreation = Time.now();
+                                statut = "En attente";
+                            };
+                            litiges.put(id, nouveauLitige);
+                            #ok(true)
+                        } else {
+                            #err("La période de contestation est terminée pour ce titre.")
+                        }
+                    };
+                    case (null) #err("Titre non trouvé.")
+                }
+            };
+            case (null) #err("Utilisateur non trouvé.")
+        }
+    };
+
+    public shared(msg) func transfererTitre(id : Nat, nouveauProprietaire : Principal) : async Result.Result<Bool, Text> {
         switch (users.get(msg.caller)) {
             case (?user) {
                 switch (user.role) {
                     case (#Proprietaire or #AgentImmobilier) {
                         switch (titres.get(id)) {
                             case (?titre) {
-                                if (titre.proprietaire == msg.caller) {
+                                if (titre.proprietaire == msg.caller and titre.statut == "Vérifié") {
                                     let titreModifie = {
                                         id = titre.id;
                                         proprietaire = nouveauProprietaire;
@@ -133,6 +219,9 @@ actor TitreFoncier {
                                         coordonnees = titre.coordonnees;
                                         documents = titre.documents;
                                         statut = "En attente de validation";
+                                        verifications = titre.verifications;
+                                        gpsCoordinates = titre.gpsCoordinates;
+                                        contestationPeriodEnd = titre.contestationPeriodEnd;
                                     };
                                     titres.put(id, titreModifie);
                                     
@@ -150,7 +239,7 @@ actor TitreFoncier {
                                     
                                     #ok(true)
                                 } else {
-                                    #err("Vous n'êtes pas le propriétaire de ce titre.")
+                                    #err("Vous n'êtes pas le propriétaire de ce titre ou le titre n'est pas vérifié.")
                                 }
                             };
                             case (null) #err("Titre non trouvé.")
@@ -163,8 +252,7 @@ actor TitreFoncier {
         }
     };
 
-    // Fonction pour valider un transfert (accessible aux fonctionnaires)
-    public shared(msg) func validerTransfert(transactionId : Nat) : async Result<Bool, Text> {
+    public shared(msg) func validerTransfert(transactionId : Nat) : async Result.Result<Bool, Text> {
         switch (users.get(msg.caller)) {
             case (?user) {
                 switch (user.role) {
@@ -182,7 +270,10 @@ actor TitreFoncier {
                                                 dateCreation = titre.dateCreation;
                                                 coordonnees = titre.coordonnees;
                                                 documents = titre.documents;
-                                                statut = "Actif";
+                                                statut = "Vérifié";
+                                                verifications = titre.verifications;
+                                                gpsCoordinates = titre.gpsCoordinates;
+                                                contestationPeriodEnd = Time.now() + 30 * 24 * 60 * 60 * 1000000000;
                                             }
                                         };
                                         case (null) return #err("Titre non trouvé.");
@@ -214,8 +305,7 @@ actor TitreFoncier {
         }
     };
 
-    // Fonction pour ajouter un document à un titre
-    public shared(msg) func ajouterDocument(titreId : Nat, nomDoc : Text, hashDoc : Text) : async Result<Bool, Text> {
+    public shared(msg) func ajouterDocument(titreId : Nat, nomDoc : Text, hashDoc : Text) : async Result.Result<Bool, Text> {
         switch (users.get(msg.caller)) {
             case (?user) {
                 switch (user.role) {
@@ -241,6 +331,9 @@ actor TitreFoncier {
                                         coordonnees = titre.coordonnees;
                                         documents = nouveauxDocs;
                                         statut = titre.statut;
+                                        verifications = titre.verifications;
+                                        gpsCoordinates = titre.gpsCoordinates;
+                                        contestationPeriodEnd = titre.contestationPeriodEnd;
                                     };
                                     titres.put(titreId, titreModifie);
                                     #ok(true)
@@ -258,8 +351,7 @@ actor TitreFoncier {
         }
     };
 
-    // Fonction pour créer un litige
-    public shared(msg) func creerLitige(titreId : Nat, description : Text) : async Result<Nat, Text> {
+    public shared(msg) func creerLitige(titreId : Nat, description : Text) : async Result.Result<Nat, Text> {
         switch (users.get(msg.caller)) {
             case (?user) {
                 let id = nextLitigeId;
@@ -279,8 +371,7 @@ actor TitreFoncier {
         }
     };
 
-    // Fonction pour résoudre un litige (accessible aux fonctionnaires)
-    public shared(msg) func resoudreLitige(litigeId : Nat, resolution : Text) : async Result<Bool, Text> {
+    public shared(msg) func resoudreLitige(litigeId : Nat, resolution : Text) : async Result.Result<Bool, Text> {
         switch (users.get(msg.caller)) {
             case (?user) {
                 switch (user.role) {
@@ -308,12 +399,10 @@ actor TitreFoncier {
         }
     };
 
-    // Fonction pour obtenir les détails d'un titre
     public query func getTitre(id : Nat) : async ?Titre {
         titres.get(id)
     };
 
-    // Fonction pour obtenir tous les titres (avec filtrage pour les non-fonctionnaires)
     public query(msg) func getAllTitres() : async [Titre] {
         switch (users.get(msg.caller)) {
             case (?user) {
@@ -327,18 +416,15 @@ actor TitreFoncier {
         }
     };
 
-    // Fonction pour obtenir les transactions d'un titre
     public query func getTransactions(titreId : Nat) : async [Transaction] {
         Iter.toArray(transactions.vals())
     };
 
-    // Fonction pour vérifier l'utilisateur actuel
     public shared query(msg) func verifierUtilisateur() : async ?User {
         users.get(msg.caller)
     };
 
-    // Fonction pour obtenir les litiges (accessible aux fonctionnaires)
-    public shared query(msg) func getLitiges() : async Result<[Litige], Text> {
+    public shared query(msg) func getLitiges() : async Result.Result<[Litige], Text> {
         switch (users.get(msg.caller)) {
             case (?user) {
                 switch (user.role) {
@@ -349,4 +435,54 @@ actor TitreFoncier {
             case (null) #err("Utilisateur non trouvé.");
         }
     };
-}
+
+    // Nouvelle fonction pour obtenir l'historique des vérifications d'un titre
+    public query func getVerificationHistoire(titreId : Nat) : async Result.Result<[VerificationProof], Text> {
+        switch (titres.get(titreId)) {
+            case (?titre) #ok(titre.verifications);
+            case (null) #err("Titre non trouvé.");
+        }
+    };
+
+    // Nouvelle fonction pour vérifier si un titre est dans sa période de contestation
+    public query func estContestable(titreId : Nat) : async Result.Result<Bool, Text> {
+        switch (titres.get(titreId)) {
+            case (?titre) #ok(Time.now() <= titre.contestationPeriodEnd);
+            case (null) #err("Titre non trouvé.");
+        }
+    };
+
+    // Fonction pour mettre à jour les coordonnées GPS d'un titre (accessible aux géomètres et fonctionnaires)
+    public shared(msg) func mettreAJourGPS(titreId : Nat, nouvellesCoordonnees : [Float]) : async Result.Result<Bool, Text> {
+        switch (users.get(msg.caller)) {
+            case (?user) {
+                switch (user.role) {
+                    case (#Geometre or #Fonctionnaire) {
+                        switch (titres.get(titreId)) {
+                            case (?titre) {
+                                let titreModifie = {
+                                    id = titre.id;
+                                    proprietaire = titre.proprietaire;
+                                    localisation = titre.localisation;
+                                    superficie = titre.superficie;
+                                    dateCreation = titre.dateCreation;
+                                    coordonnees = titre.coordonnees;
+                                    documents = titre.documents;
+                                    statut = titre.statut;
+                                    verifications = titre.verifications;
+                                    gpsCoordinates = nouvellesCoordonnees;
+                                    contestationPeriodEnd = titre.contestationPeriodEnd;
+                                };
+                                titres.put(titreId, titreModifie);
+                                #ok(true)
+                            };
+                            case (null) #err("Titre non trouvé.")
+                        }
+                    };
+                    case (_) #err("Accès non autorisé. Seuls les géomètres et les fonctionnaires peuvent mettre à jour les coordonnées GPS.")
+                };
+            };
+            case (null) #err("Utilisateur non trouvé.")
+        }
+    };
+};
