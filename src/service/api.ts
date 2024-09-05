@@ -1,5 +1,5 @@
 import { Actor, HttpAgent } from "@dfinity/agent";
-import { idlFactory } from "../declarations/
+import { idlFactory } from "../declarations/"
 // import { idlFactory } from "./declarations/titreFoncier.did.js";
 
 const agent = new HttpAgent();
