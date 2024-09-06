@@ -1,174 +1,206 @@
-'use client'
+import React, { useState } from 'react';
+import {api} from '../../../service/api'
+const AuthPage = ({ onSubmit }) => {
+  // État pour les données du formulaire
+  const [formData, setFormData] = useState({
+    nom: '',
+    role: 'Acheteur',
+    dateNaissance: '',
+    pieceIdentite: '',
+    adresse: '',
+    telephone: '',
+    email: '',
+    capaciteFinanciere: '',
+  });
 
-import { useEffect, useState } from 'react'
+  // État pour gérer l'affichage du formulaire de connexion ou d'inscription
+  const [isLogin, setIsLogin] = useState(true);
 
+  // Fonction pour gérer les changements dans les champs du formulaire
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
 
-  export default function AuthPage({ isLogin: initialIsLogin, onSubmit, initialData } = {}) {
-    const [isLogin, setIsLogin] = useState(initialIsLogin ?? false)
-    const [formData, setFormData] = useState({
-      fullName: '',
-      email: '',
-      password: '',
-      address: '',
-      phoneNumber: '',
-      idNumber: '',
-      landTitle: '',
-    })
-
-    useEffect(() => {
-        if (initialData) {
-          setFormData(prevData => ({
-            ...prevData,
-            ...initialData,
-          }))
-        }
-      }, [initialData])
-    
-      const handleChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value })
-      }
-    
-      const handleSubmit = (e) => {
-        e.preventDefault()
-        if (onSubmit) {
-          onSubmit(formData)
+  // Fonction pour gérer la soumission du formulaire
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (isLogin) {
+        // Logique de connexion
+        const user = await api.verifierUtilisateur(formData.email, formData.pieceIdentite);
+        if (user) {
+          onSubmit(user);
         } else {
-          console.log('Form submitted:', formData)
+          console.error("Utilisateur non trouvé ou informations incorrectes");
+        }
+      } else {
+        // Logique d'inscription
+        const result = await api.creerUtilisateur(
+          formData.nom,
+          formData.role,
+          formData.dateNaissance,
+          formData.pieceIdentite,
+          formData.adresse,
+          formData.telephone,
+          formData.email
+        );
+        if (result.ok) {
+          if (formData.role === 'Acheteur') {
+            await api.ajouterCapaciteFinanciere(formData.capaciteFinanciere);
+          }
+          const user = await api.verifierUtilisateur();
+          onSubmit(user);
         }
       }
+    } catch (error) {
+      console.error("Erreur lors de l'authentification:", error);
+    }
+  };
 
   return (
-    <div className="w-full max-w-lg mx-auto bg-white rounded-lg shadow-md p-4 sm:p-6 md:p-8">
-      <h2 className="text-xl sm:text-2xl font-bold mb-2 text-center">
-        {isLogin ? 'Connexion' : 'Enregistrement'}
+    <div className="w-full max-w-md mx-auto">
+      <h2 className="text-2xl font-bold mb-4 text-center">
+        {isLogin ? 'Connexion' : 'Inscription'}
       </h2>
-      <p className="text-sm sm:text-base text-gray-600 text-center mb-4 sm:mb-6">
-        {isLogin ? 'Connectez-vous à votre compte' : 'Créez un nouveau compte'}
-      </p>
-
-      <div className="flex mb-4">
-        <button
-          className={`flex-1 py-2 text-sm sm:text-base ${isLogin ? 'bg-yellow-700 text-white' : 'bg-gray-200 text-gray-700'}`}
-          onClick={() => setIsLogin(true)}
-        >
-          Connexion
-        </button>
-        <button
-          className={`flex-1 py-2 text-sm sm:text-base ${!isLogin ? 'bg-yellow-700 text-white' : 'bg-gray-200 text-gray-700'}`}
-          onClick={() => setIsLogin(false)}
-        >
-          Enregistrement
-        </button>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {!isLogin && (
-          <div>
-            <label htmlFor="fullName" className="block text-sm font-medium text-gray-700">Nom complet</label>
-            <input 
-              type="text" 
-              id="fullName" 
-              name="fullName" 
-              value={formData.fullName}
-              onChange={handleChange}
-              required
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-yellow-700 focus:border-yellow-700 text-sm sm:text-base"
-            />
-          </div>
-        )}
-        <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email</label>
-          <input 
-            type="email" 
-            id="email" 
-            name="email" 
-            value={formData.email}
-            onChange={handleChange}
-            required
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-yellow-700 focus:border-yellow-700 text-sm sm:text-base"
-          />
-        </div>
-        <div>
-          <label htmlFor="password" className="block text-sm font-medium text-gray-700">Mot de passe</label>
-          <input 
-            type="password" 
-            id="password" 
-            name="password" 
-            value={formData.password}
-            onChange={handleChange}
-            required
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-yellow-700 focus:border-yellow-700 text-sm sm:text-base"
-          />
-        </div>
+      <form onSubmit={handleSubmit} className="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
         {!isLogin && (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="address" className="block text-sm font-medium text-gray-700">Adresse</label>
-                <input 
-                  type="text" 
-                  id="address" 
-                  name="address" 
-                  value={formData.address}
-                  onChange={handleChange}
-                  required
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-yellow-700 focus:border-yellow-700 text-sm sm:text-base"
-                />
-              </div>
-              <div>
-                <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700">Numéro de téléphone</label>
-                <input 
-                  type="tel" 
-                  id="phoneNumber" 
-                  name="phoneNumber" 
-                  value={formData.phoneNumber}
-                  onChange={handleChange}
-                  required
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-yellow-700 focus:border-yellow-700 text-sm sm:text-base"
-                />
-              </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="nom">
+                Nom complet
+              </label>
+              <input
+                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                id="nom"
+                type="text"
+                name="nom"
+                value={formData.nom}
+                onChange={handleChange}
+                required
+              />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="idNumber" className="block text-sm font-medium text-gray-700">Numéro d'identification nationale</label>
-                <input 
-                  type="text" 
-                  id="idNumber" 
-                  name="idNumber" 
-                  value={formData.idNumber}
-                  onChange={handleChange}
-                  required
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-yellow-700 focus:border-yellow-700 text-sm sm:text-base"
-                />
-              </div>
-              <div>
-                <label htmlFor="landTitle" className="block text-sm font-medium text-gray-700">Numéro de titre foncier</label>
-                <input 
-                  type="text" 
-                  id="landTitle" 
-                  name="landTitle" 
-                  value={formData.landTitle}
-                  onChange={handleChange}
-                  required
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-yellow-700 focus:border-yellow-700 text-sm sm:text-base"
-                />
-              </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="role">
+                Rôle
+              </label>
+              <select
+                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                id="role"
+                name="role"
+                value={formData.role}
+                onChange={handleChange}
+              >
+                <option value="Proprietaire">Propriétaire</option>
+                <option value="Acheteur">Acheteur</option>
+                <option value="Admin">Admin</option>
+              </select>
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="dateNaissance">
+                Date de naissance
+              </label>
+              <input
+                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                id="dateNaissance"
+                type="date"
+                name="dateNaissance"
+                value={formData.dateNaissance}
+                onChange={handleChange}
+                required
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="adresse">
+                Adresse
+              </label>
+              <input
+                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                id="adresse"
+                type="text"
+                name="adresse"
+                value={formData.adresse}
+                onChange={handleChange}
+                required
+              />
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="telephone">
+                Téléphone
+              </label>
+              <input
+                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                id="telephone"
+                type="tel"
+                name="telephone"
+                value={formData.telephone}
+                onChange={handleChange}
+                required
+              />
             </div>
           </>
         )}
-        <button type="submit"
-          className="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm sm:text-base font-medium text-white bg-yellow-600 hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-700"
-        >
-          {isLogin ? "Se connecter" : "S'enregistrer"}
-        </button>
+        <div className="mb-4">
+          <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="email">
+            Email
+          </label>
+          <input
+            className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+            id="email"
+            type="email"
+            name="email"
+            value={formData.email}
+            onChange={handleChange}
+            required
+          />
+        </div>
+        <div className="mb-6">
+          <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="pieceIdentite">
+            Numéro de pièce d'identité
+          </label>
+          <input
+            className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+            id="pieceIdentite"
+            type="text"
+            name="pieceIdentite"
+            value={formData.pieceIdentite}
+            onChange={handleChange}
+            required
+          />
+        </div>
+        {!isLogin && formData.role === 'Acheteur' && (
+          <div className="mb-6">
+            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="capaciteFinanciere">
+              Capacité financière
+            </label>
+            <input
+              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              id="capaciteFinanciere"
+              type="text"
+              name="capaciteFinanciere"
+              value={formData.capaciteFinanciere}
+              onChange={handleChange}
+              required
+            />
+          </div>
+        )}
+        <div className="flex items-center justify-between">
+          <button
+            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+            type="submit"
+          >
+            {isLogin ? 'Se connecter' : 'S\'inscrire'}
+          </button>
+          <button
+            className="inline-block align-baseline font-bold text-sm text-blue-500 hover:text-blue-800"
+            type="button"
+            onClick={() => setIsLogin(!isLogin)}
+          >
+            {isLogin ? 'Créer un compte' : 'Déjà un compte ?'}
+          </button>
+        </div>
       </form>
-
-      <p className="mt-4 text-sm sm:text-base text-center text-gray-600">
-        {isLogin ? "Pas encore de compte ?" : "Déjà un compte ?"}{" "}
-        <button onClick={() => setIsLogin(!isLogin)} className="text-yellow-600 hover:text-yellow-700">
-          {isLogin ? "S'enregistrer" : "Se connecter"}
-        </button>
-      </p>
     </div>
-  )
-}
+  );
+};
+
+export default AuthPage;

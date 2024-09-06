@@ -62,8 +62,7 @@ const options = {
   },
 };
 
-
-const ChartTwo= () => {
+const ChartTwo = () => {
   const [state, setState] = useState({
     series: [
       {
