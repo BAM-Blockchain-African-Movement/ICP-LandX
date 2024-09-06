@@ -1,5 +1,20 @@
 # `landx`
 
+## Project Description
+
+LandX is an innovative blockchain-based land registry system designed to address the challenges in land management and property transactions in Cameroon. This decentralized platform aims to improve transparency, reduce corruption, and streamline land-related processes.
+
+Key features include:
+- Secure and transparent registration of land titles on the blockchain
+- Automated property transfers using smart contracts
+- Decentralized dispute resolution mechanism
+- Integration with existing land distribution systems in Cameroon
+- Multi-lingual support to cater to Cameroon's linguistic diversity
+
+LandX seeks to empower property owners, simplify land transactions, and contribute to economic development by providing a secure and efficient land management solution.
+
+## Getting Started
+
 Welcome to your new `landx` project and to the Internet Computer development community. By default, creating a new project adds this README and some template files to your project directory. You can edit these template files to customize your project and to include your own code to speed up the development cycle.
 
 To get started, you might want to explore the project directory structure and the default configuration file. Working with this project in your development environment will not affect any production deployment or identity tokens.
@@ -26,7 +41,6 @@ If you want to test your project locally, you can use the following commands:
 ```bash
 # Starts the replica, running in the background
 dfx start --background
-
 # Deploys your canisters to the replica and generates your candid interface
 dfx deploy
 ```
