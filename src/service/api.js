@@ -2,7 +2,6 @@ import { Actor, HttpAgent } from "@dfinity/agent";
 import { Principal } from "@dfinity/principal";
 import { idlFactory } from "../declarations/landx_backend";
 
-// Création de l'acteur
 const agent = new HttpAgent();
 const titreFoncierActor = Actor.createActor(idlFactory, { 
   agent, 
@@ -10,134 +9,159 @@ const titreFoncierActor = Actor.createActor(idlFactory, {
 });
 
 export const api = {
-  // Gestion des utilisateurs
-  creerUtilisateur: async (nom, dateNaissance, pieceIdentite, adresse, telephone, email, role, capaciteFinanciere) => {
-    return await titreFoncierActor.creerUtilisateur(nom, dateNaissance, pieceIdentite, adresse, telephone, email, role, capaciteFinanciere);
+  creerUtilisateur: async (nom, dateNaissance, pieceIdentite, adresse, telephone, email, role, capaciteFinanciere, terrains) => {
+    try {
+      const capaciteFinanciereOpt = role === 'Acheteur' ? [capaciteFinanciere] : [];
+      const terrainsOpt = role === 'Proprietaire' ? [terrains] : [];
+      
+      return await titreFoncierActor.creerUtilisateur(
+        nom, 
+        dateNaissance, 
+        pieceIdentite, 
+        adresse, 
+        telephone, 
+        email, 
+        role,
+        role === 'Acheteur' ? [capaciteFinanciere] : [null] 
+      );
+    } catch (error) {
+      console.error("Erreur lors de la création de l'utilisateur:", error);
+      throw error;
+    }
   },
 
   mettreAJourUtilisateur: async (nom, dateNaissance, pieceIdentite, adresse, telephone, email, capaciteFinanciere) => {
-    return await titreFoncierActor.mettreAJourUtilisateur(nom, dateNaissance, pieceIdentite, adresse, telephone, email, capaciteFinanciere);
+    try {
+      return await titreFoncierActor.mettreAJourUtilisateur(nom, dateNaissance, pieceIdentite, adresse, telephone, email, capaciteFinanciere);
+    } catch (error) {
+      console.error("Erreur lors de la mise à jour de l'utilisateur:", error);
+      throw error;
+    }
   },
 
   verifierUtilisateur: async () => {
-    return await titreFoncierActor.verifierUtilisateur();
+    try {
+      return await titreFoncierActor.verifierUtilisateur();
+    } catch (error) {
+      console.error("Erreur lors de la vérification de l'utilisateur:", error);
+      throw error;
+    }
   },
 
-  // Gestion des titres
   creerTitre: async (localisation, superficie, lat, long, gpsCoords) => {
-    return await titreFoncierActor.creerTitre(localisation, superficie, lat, long, gpsCoords);
+    try {
+      return await titreFoncierActor.creerTitre(localisation, Number(superficie), Number(lat), Number(long), gpsCoords.map(Number));
+    } catch (error) {
+      console.error("Erreur lors de la création du titre:", error);
+      throw error;
+    }
   },
 
   verifierTitre: async (titreId, proofType, proofHash) => {
-    return await titreFoncierActor.verifierTitre(titreId, proofType, proofHash);
+    try {
+      return await titreFoncierActor.verifierTitre(Number(titreId), proofType, proofHash);
+    } catch (error) {
+      console.error("Erreur lors de la vérification du titre:", error);
+      throw error;
+    }
   },
 
   contesterTitre: async (titreId, raison) => {
-    return await titreFoncierActor.contesterTitre(titreId, raison);
+    try {
+      return await titreFoncierActor.contesterTitre(Number(titreId), raison);
+    } catch (error) {
+      console.error("Erreur lors de la contestation du titre:", error);
+      throw error;
+    }
   },
 
   transfererTitre: async (id, nouveauProprietaire) => {
-    return await titreFoncierActor.transfererTitre(id, nouveauProprietaire);
+    try {
+      return await titreFoncierActor.transfererTitre(Number(id), Principal.fromText(nouveauProprietaire));
+    } catch (error) {
+      console.error("Erreur lors du transfert du titre:", error);
+      throw error;
+    }
   },
 
   validerTransfert: async (transactionId) => {
-    return await titreFoncierActor.validerTransfert(transactionId);
+    try {
+      return await titreFoncierActor.validerTransfert(Number(transactionId));
+    } catch (error) {
+      console.error("Erreur lors de la validation du transfert:", error);
+      throw error;
+    }
   },
 
   ajouterDocument: async (titreId, nomDoc, hashDoc) => {
-    return await titreFoncierActor.ajouterDocument(titreId, nomDoc, hashDoc);
+    try {
+      return await titreFoncierActor.ajouterDocument(Number(titreId), nomDoc, hashDoc);
+    } catch (error) {
+      console.error("Erreur lors de l'ajout du document:", error);
+      throw error;
+    }
   },
 
   getTitre: async (id) => {
-    return await titreFoncierActor.getTitre(id);
+    try {
+      return await titreFoncierActor.getTitre(Number(id));
+    } catch (error) {
+      console.error("Erreur lors de la récupération du titre:", error);
+      throw error;
+    }
   },
 
   getAllTitres: async () => {
-    return await titreFoncierActor.getAllTitres();
+    try {
+      return await titreFoncierActor.getAllTitres();
+    } catch (error) {
+      console.error("Erreur lors de la récupération de tous les titres:", error);
+      throw error;
+    }
   },
 
-  // Gestion des litiges
-  creerLitige: async (titreId, description) => {
-    return await titreFoncierActor.creerLitige(titreId, description);
-  },
-
-  resoudreLitige: async (litigeId, resolution) => {
-    return await titreFoncierActor.resoudreLitige(litigeId, resolution);
+  getTransactions: async (titreId) => {
+    try {
+      return await titreFoncierActor.getTransactions(Number(titreId));
+    } catch (error) {
+      console.error("Erreur lors de la récupération des transactions:", error);
+      throw error;
+    }
   },
 
   getLitiges: async () => {
-    return await titreFoncierActor.getLitiges();
-  },
-
-  // Autres fonctionnalités
-  getTransactions: async (titreId) => {
-    return await titreFoncierActor.getTransactions(titreId);
+    try {
+      return await titreFoncierActor.getLitiges();
+    } catch (error) {
+      console.error("Erreur lors de la récupération des litiges:", error);
+      throw error;
+    }
   },
 
   getVerificationHistoire: async (titreId) => {
-    return await titreFoncierActor.getVerificationHistoire(titreId);
+    try {
+      return await titreFoncierActor.getVerificationHistoire(Number(titreId));
+    } catch (error) {
+      console.error("Erreur lors de la récupération de l'historique de vérification:", error);
+      throw error;
+    }
   },
 
   estContestable: async (titreId) => {
-    return await titreFoncierActor.estContestable(titreId);
+    try {
+      return await titreFoncierActor.estContestable(Number(titreId));
+    } catch (error) {
+      console.error("Erreur lors de la vérification de la contestabilité:", error);
+      throw error;
+    }
   },
 
   mettreAJourGPS: async (titreId, nouvellesCoordonnees) => {
-    return await titreFoncierActor.mettreAJourGPS(titreId, nouvellesCoordonnees);
+    try {
+      return await titreFoncierActor.mettreAJourGPS(Number(titreId), nouvellesCoordonnees.map(Number));
+    } catch (error) {
+      console.error("Erreur lors de la mise à jour des coordonnées GPS:", error);
+      throw error;
+    }
   },
 };
-
-// Exemples d'utilisation
-async function exemples() {
-  try {
-    // Créer un utilisateur
-    const resultatCreation = await api.creerUtilisateur(
-      "John Doe",
-      "1990-01-01",
-      "ID123456",
-      "123 Rue Principale, Ville",
-      "+1234567890",
-      "john@example.com",
-      "Proprietaire",
-      null
-    );
-    console.log("Création utilisateur:", resultatCreation);
-
-    // Vérifier l'utilisateur
-    const utilisateur = await api.verifierUtilisateur();
-    console.log("Utilisateur vérifié:", utilisateur);
-
-    // Créer un titre
-    const resultatTitre = await api.creerTitre(
-      "456 Avenue Secondaire, Ville",
-      1000, // superficie en m²
-      48.8566, // latitude
-      2.3522, // longitude
-      [48.8566, 2.3522, 48.8570, 2.3530] // coordonnées GPS
-    );
-    console.log("Création titre:", resultatTitre);
-
-    // Obtenir tous les titres
-    const titres = await api.getAllTitres();
-    console.log("Tous les titres:", titres);
-
-    // Créer un litige
-    if (titres.length > 0) {
-      const resultatLitige = await api.creerLitige(
-        titres[0].id,
-        "Contestation de la limite de propriété"
-      );
-      console.log("Création litige:", resultatLitige);
-    }
-
-    // Obtenir les litiges
-    const litiges = await api.getLitiges();
-    console.log("Tous les litiges:", litiges);
-
-  } catch (error) {
-    console.error("Erreur lors de l'exécution des exemples:", error);
-  }
-}
-
-// Exécuter les exemples
-exemples();
