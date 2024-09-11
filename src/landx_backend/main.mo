@@ -9,6 +9,8 @@ import Array "mo:base/Array";
 import Iter "mo:base/Iter";
 import Hash "mo:base/Hash";
 import Int "mo:base/Int";
+import Result "mo:base/Result";
+import Buffer "mo:base/Buffer";
 
 actor AuthBackend {
 
@@ -53,6 +55,7 @@ actor AuthBackend {
     verifications : [VerificationProof];
     gpsCoordinates : [Float];
     contestationPeriodEnd : Time.Time;
+     hash : Text;
   };
 
   type Transaction = {
@@ -82,9 +85,10 @@ actor AuthBackend {
   private var nextLitigeId : Nat = 1;
   private var nextDocumentId : Nat = 1;
 
- private let titres = HashMap.HashMap<Nat, Titre>(10, Nat.equal, Hash.hash);
+   private let titres = HashMap.HashMap<Nat, Titre>(10, Nat.equal, Hash.hash);
   private let transactions = HashMap.HashMap<Nat, Transaction>(10, Nat.equal, Hash.hash);
   private let litiges = HashMap.HashMap<Nat, Litige>(10, Nat.equal, Hash.hash);
+  private let titreHashMap = HashMap.HashMap<Text, Nat>(10, Text.equal, Text.hash);
 
   // Fonctions existantes
   private func hashPassword(password: Text) : Text {
@@ -173,9 +177,11 @@ actor AuthBackend {
   };
 
   // Nouvelles fonctions pour la gestion des terrains
-  public shared(msg) func createTitre(localisation: Text, superficie: Nat, coordonnees: Coordonnees, gpsCoordinates: [Float]) : async Nat {
+   public shared(msg) func createTitre(localisation: Text, superficie: Nat, coordonnees: Coordonnees, gpsCoordinates: [Float]) : async Nat {
     let id = nextTitreId;
     nextTitreId += 1;
+
+    let titreHash = generateTitreHash(id, msg.caller, localisation, superficie);
 
     let nouveauTitre : Titre = {
       id = id;
@@ -189,14 +195,91 @@ actor AuthBackend {
       verifications = [];
       gpsCoordinates = gpsCoordinates;
       contestationPeriodEnd = Time.now() + 30 * 24 * 60 * 60 * 1000000000; // 30 jours en nanosecondes
+      hash = titreHash;
     };
 
     titres.put(id, nouveauTitre);
+    titreHashMap.put(titreHash, id);
     id
+  };
+type VerificationResult = Result.Result<Text, Text>;
+  // Nouvelle fonction pour générer le hash d'un titre
+  private func generateTitreHash(id: Nat, proprietaire: Principal, localisation: Text, superficie: Nat) : Text {
+    let hashInput = Nat.toText(id) # Principal.toText(proprietaire) # localisation # Nat.toText(superficie);
+    let hash = Text.hash(hashInput);
+    Nat32.toText(hash)
+  };
+
+     public shared(msg) func verifierTitre(titreId: Nat, proofType: Text, proofHash: Text) : async VerificationResult {
+    switch (titres.get(titreId)) {
+      case null { #err("Titre non trouvé") };
+      case (?titre) {
+        let nouvelleVerification : VerificationProof = {
+          verifierId = msg.caller;
+          timestamp = Time.now();
+          proofType = proofType;
+          proofHash = proofHash;
+        };
+
+        let verificationsMAJ = Array.append(titre.verifications, [nouvelleVerification]);
+        let titreMAJ : Titre = {
+          titre with
+          verifications = verificationsMAJ;
+        };
+
+        titres.put(titreId, titreMAJ);
+        #ok("Titre vérifié avec succès")
+      };
+    }
+  };
+
+  // Nouvelle fonction pour rechercher un titre par son hash
+  public query func searchTitreByHash(hash: Text) : async ?Titre {
+    switch (titreHashMap.get(hash)) {
+      case null { null };
+      case (?titreId) { titres.get(titreId) };
+    }
   };
 
   public query func getTitres() : async [Titre] {
     Iter.toArray(titres.vals())
+  };
+   public shared(msg) func ajouterDocument(titreId: Nat, nom: Text, hash: Text) : async ?Nat {
+    switch (titres.get(titreId)) {
+      case null { null };
+      case (?titre) {
+        let documentId = nextDocumentId;
+        nextDocumentId += 1;
+
+        let nouveauDocument : Document = {
+          id = documentId;
+          nom = nom;
+          hash = hash;
+          dateUpload = Time.now();
+          titreId = titreId; // Ajout de l'ID du titre
+        };
+
+        let documentsMAJ = Array.append(titre.documents, [nouveauDocument]);
+        let titreMAJ : Titre = {
+          titre with
+          documents = documentsMAJ;
+        };
+
+        titres.put(titreId, titreMAJ);
+        ?documentId
+      };
+    }
+  };
+
+  // Nouvelle fonction pour lister tous les documents
+  public query func listAllDocuments() : async [Document] {
+    let buffer = Buffer.Buffer<Document>(0);
+    for (titre in titres.vals()) {
+      for (doc in titre.documents.vals()) {
+        buffer.add(doc);
+      };
+    };
+    Buffer.toArray(buffer)
   };
 
   public shared(msg) func acheterTerrain(titreId: Nat) : async Bool {
@@ -286,31 +369,6 @@ actor AuthBackend {
     litiges.get(litigeId)
   };
 
-  public shared(msg) func ajouterDocument(titreId: Nat, nom: Text, hash: Text) : async ?Nat {
-    switch (titres.get(titreId)) {
-      case null { null };
-      case (?titre) {
-        let documentId = nextDocumentId;
-        nextDocumentId += 1;
-
-        let nouveauDocument : Document = {
-          id = documentId;
-          nom = nom;
-          hash = hash;
-          dateUpload = Time.now();
-        };
-
-        let documentsMAJ = Array.append(titre.documents, [nouveauDocument]);
-        let titreMAJ : Titre = {
-          titre with
-          documents = documentsMAJ;
-        };
-
-        titres.put(titreId, titreMAJ);
-        ?documentId
-      };
-    }
-  };
 
   public query func getDocuments(titreId: Nat) : async ?[Document] {
     switch (titres.get(titreId)) {
