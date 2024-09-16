@@ -4,16 +4,21 @@ import { useAuth } from './AuthContext';
 import logo from '../assets/LandX.jpg'; // Assurez-vous que le chemin est correct
 
 const Header = () => {
+  // Utilisation du hook personnalisé useAuth pour accéder aux fonctions d'authentification
   const { user, logout, hasAdminAccess } = useAuth();
+
+   // Hook de navigation de React Router
   const navigate = useNavigate();
 
+   // Fonction pour gérer la déconnexion
   const handleLogout = async () => {
-    // Clear authentication token or session info
+  
+    // Suppression des tokens d'authentification du stockage local
     localStorage.removeItem('authToken');
     sessionStorage.removeItem('authToken');
   
-    // Redirect or update UI
-    window.location.href = '/login'; // Or use react-router's useNavigate()
+    // Redirection vers la page de connexion
+    navigate('/login');
   };
 
   return (

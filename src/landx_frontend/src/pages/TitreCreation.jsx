@@ -25,9 +25,9 @@ const TitreCreation = () => {
         { latitude: Number(nouveauTerrain.latitude), longitude: Number(nouveauTerrain.longitude) },
         nouveauTerrain.gpsCoordinates.split(',').map(Number)
       );
-      // Show success toast
+      // message de success
       toast.success('Titre créé avec succès!');
-      // Reset form
+      // renitialise les valeurs du formulaire
       setNouveauTerrain({
         localisation: '',
         superficie: '',

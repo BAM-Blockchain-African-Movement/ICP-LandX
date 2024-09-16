@@ -12,9 +12,11 @@ import Int "mo:base/Int";
 import Result "mo:base/Result";
 import Buffer "mo:base/Buffer";
 
+// Définition de l'acteur principal
 actor AuthBackend {
 
-  // Types existants
+  // Définition des types de données
+  // Type User : représente un utilisateur du système
   type User = {
     name: Text;
     email: Text;
@@ -23,12 +25,13 @@ actor AuthBackend {
     role: Nat;
   };
 
-  // Nouveaux types pour la gestion des terrains
+ // Type Coordonnees : représente les coordonnées géographiques
   type Coordonnees = {
     latitude : Float;
     longitude : Float;
   };
 
+// Type Document : représente un document lié à un titre foncier
   type Document = {
     id : Nat;
     nom : Text;
@@ -36,6 +39,7 @@ actor AuthBackend {
     dateUpload : Time.Time;
   };
 
+// Type VerificationProof : représente une preuve de vérification pour un titre
   type VerificationProof = {
     verifierId: Principal;
     timestamp: Time.Time;
@@ -43,6 +47,7 @@ actor AuthBackend {
     proofHash: Text;
   };
 
+// Type Titre : représente un titre foncier
   type Titre = {
     id : Nat;
     proprietaire : Principal;
@@ -58,6 +63,7 @@ actor AuthBackend {
      hash : Text;
   };
 
+// Type Transaction : représente une transaction immobilière
   type Transaction = {
     id : Nat;
     titreId : Nat;
@@ -67,6 +73,7 @@ actor AuthBackend {
     statut : Text;
   };
 
+// Type Litige : représente un litige lié à un titre foncier
   type Litige = {
     id : Nat;
     titreId : Nat;
@@ -76,26 +83,33 @@ actor AuthBackend {
     statut : Text;
   };
 
-  // Variables existantes
+// Stockage des données
+  // HashMap pour stocker les utilisateurs
   private var users = HashMap.HashMap<Principal, User>(10, Principal.equal, Principal.hash);
 
-  // Nouvelles variables pour la gestion des terrains
+  // Variables pour gérer les identifiants uniques
   private var nextTitreId : Nat = 1;
   private var nextTransactionId : Nat = 1;
   private var nextLitigeId : Nat = 1;
   private var nextDocumentId : Nat = 1;
 
+// HashMaps pour stocker les titres, transactions, litiges et hashes de titres
    private let titres = HashMap.HashMap<Nat, Titre>(10, Nat.equal, Hash.hash);
   private let transactions = HashMap.HashMap<Nat, Transaction>(10, Nat.equal, Hash.hash);
   private let litiges = HashMap.HashMap<Nat, Litige>(10, Nat.equal, Hash.hash);
   private let titreHashMap = HashMap.HashMap<Text, Nat>(10, Text.equal, Text.hash);
 
-  // Fonctions existantes
+ // Fonctions utilitaires
+
+ // Fonction pour hacher un mot de passe
   private func hashPassword(password: Text) : Text {
     let hash = Text.hash(password);
     return Nat32.toText(hash);
   };
 
+// Fonctions de gestion des utilisateurs
+
+// Fonction pour enregistrer un nouvel utilisateur
   public shared(msg) func register(name: Text, email: Text, address: Text, password: Text) : async Bool {
     let caller = msg.caller;
     
@@ -116,6 +130,7 @@ actor AuthBackend {
     };
   };
 
+// Fonction pour connecter un utilisateur
   public shared(msg) func login(email: Text, password: Text) : async Bool {
     let caller = msg.caller;
     
@@ -131,6 +146,7 @@ actor AuthBackend {
     };
   };
 
+// Fonction pour changer le mot de passe d'un utilisateur
   public shared(msg) func changePassword(oldPassword: Text, newPassword: Text) : async Bool {
     let caller = msg.caller;
     
@@ -154,11 +170,13 @@ actor AuthBackend {
     };
   };
 
+// Fonction pour obtenir les informations d'un utilisateur
   public shared(msg) func getUserInfo() : async ?User {
     let caller = msg.caller;
     users.get(caller)
   };
 
+// Fonction pour définir le rôle d'un utilisateur
   public shared(msg) func setUserRole(userPrincipal: Principal, newRole: Nat) : async Bool {
     switch (users.get(userPrincipal)) {
       case (?user) {
@@ -176,7 +194,9 @@ actor AuthBackend {
     };
   };
 
-  // Nouvelles fonctions pour la gestion des terrains
+ // Fonctions de gestion des titres fonciers
+
+ // Fonction pour créer un nouveau titre foncier
    public shared(msg) func createTitre(localisation: Text, superficie: Nat, coordonnees: Coordonnees, gpsCoordinates: [Float]) : async Nat {
     let id = nextTitreId;
     nextTitreId += 1;
@@ -202,14 +222,18 @@ actor AuthBackend {
     titreHashMap.put(titreHash, id);
     id
   };
+
+  // Type pour le résultat de la vérification
 type VerificationResult = Result.Result<Text, Text>;
-  // Nouvelle fonction pour générer le hash d'un titre
+  
+  // Fonction pour générer le hash d'un titre
   private func generateTitreHash(id: Nat, proprietaire: Principal, localisation: Text, superficie: Nat) : Text {
     let hashInput = Nat.toText(id) # Principal.toText(proprietaire) # localisation # Nat.toText(superficie);
     let hash = Text.hash(hashInput);
     Nat32.toText(hash)
   };
 
+// Fonction pour vérifier un titre
      public shared(msg) func verifierTitre(titreId: Nat, proofType: Text, proofHash: Text) : async VerificationResult {
     switch (titres.get(titreId)) {
       case null { #err("Titre non trouvé") };
@@ -233,7 +257,7 @@ type VerificationResult = Result.Result<Text, Text>;
     }
   };
 
-  // Nouvelle fonction pour rechercher un titre par son hash
+  // Fonction pour rechercher un titre par son hash
   public query func searchTitreByHash(hash: Text) : async ?Titre {
     switch (titreHashMap.get(hash)) {
       case null { null };
@@ -241,9 +265,12 @@ type VerificationResult = Result.Result<Text, Text>;
     }
   };
 
+  // Fonction pour obtenir tous les titres
   public query func getTitres() : async [Titre] {
     Iter.toArray(titres.vals())
   };
+
+  // Fonction pour ajouter un document à un titre
    public shared(msg) func ajouterDocument(titreId: Nat, nom: Text, hash: Text) : async ?Nat {
     switch (titres.get(titreId)) {
       case null { null };
@@ -271,7 +298,7 @@ type VerificationResult = Result.Result<Text, Text>;
     }
   };
 
-  // Nouvelle fonction pour lister tous les documents
+  // Fonction pour lister tous les documents
   public query func listAllDocuments() : async [Document] {
     let buffer = Buffer.Buffer<Document>(0);
     for (titre in titres.vals()) {
@@ -282,6 +309,8 @@ type VerificationResult = Result.Result<Text, Text>;
     Buffer.toArray(buffer)
   };
 
+
+  // Fonction pour acheter un titre
   public shared(msg) func acheterTerrain(titreId: Nat) : async Bool {
     switch (titres.get(titreId)) {
       case null { false };
@@ -316,10 +345,13 @@ type VerificationResult = Result.Result<Text, Text>;
     }
   };
 
+  // Fonction pour obtenir toutes les transactions
   public query func getTransactions() : async [Transaction] {
     Iter.toArray(transactions.vals())
   };
 
+
+  // Fonction pour générer un titre foncier
   public func genererTitreFoncier(titreId: Nat) : async ?Text {
     switch (titres.get(titreId)) {
       case null { null };
@@ -336,14 +368,18 @@ type VerificationResult = Result.Result<Text, Text>;
   };
 
   // Fonctions get supplémentaires
+
+ // Fonction pour obtenir un titre spécifique
   public query func getTitre(titreId: Nat) : async ?Titre {
     titres.get(titreId)
   };
 
+  // Fonction pour obtenir une transaction spécifique
   public query func getTransaction(transactionId: Nat) : async ?Transaction {
     transactions.get(transactionId)
   };
 
+  // Fonction pour créer un litige
   public shared(msg) func creerLitige(titreId: Nat, description: Text) : async Nat {
     let id = nextLitigeId;
     nextLitigeId += 1;
@@ -361,15 +397,18 @@ type VerificationResult = Result.Result<Text, Text>;
     id
   };
 
+  // Fonction pour obtenir tous les litiges
   public query func getLitiges() : async [Litige] {
     Iter.toArray(litiges.vals())
   };
 
+  // Fonction pour obtenir un litige spécifique
   public query func getLitige(litigeId: Nat) : async ?Litige {
     litiges.get(litigeId)
   };
 
 
+  // Fonction pour obtenir tous les documents d'un titre
   public query func getDocuments(titreId: Nat) : async ?[Document] {
     switch (titres.get(titreId)) {
       case null { null };

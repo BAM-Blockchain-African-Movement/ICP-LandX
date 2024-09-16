@@ -3,13 +3,19 @@ import { useNavigate } from 'react-router-dom';
 import { landx_backend as AuthBackend } from 'declarations/landx_backend';
 
 const LitigeCreation = () => {
+   // États pour stocker les valeurs du formulaire
   const [titreId, setTitreId] = useState('');
   const [description, setDescription] = useState('');
-  const navigate = useNavigate(); // useNavigate hook
 
+    
+  // Hook de navigation de React Router
+  const navigate = useNavigate(); 
+
+  // Gestion de la soumission du formulaire
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+       // Appel au backend pour créer un nouveau litige
       const result = await AuthBackend.creerLitige(Number(titreId), description);
       if (result.ok) {
         alert('Litige créé avec succès !');
